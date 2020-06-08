@@ -10,7 +10,8 @@ describe LogStash::Outputs::Mongodb, :integration => true do
 
   let(:config) do
     { "uri" => uri, "database" => database,
-      "collection" => collection, "isodate" => true }
+      "collection" => collection, "isodate" => true,
+      "max_retry" => 3}
   end
 
   describe "#send" do

@@ -43,6 +43,8 @@ class LogStash::Outputs::Mongodb < LogStash::Outputs::Base
   # whatever the bulk interval value (mongodb hard limit is 1000).
   config :bulk_size, :validate => :number, :default => 900, :maximum => 999, :min => 2
 
+  config :max_retry, :validate => :number, :default => -1, :required => false
+
   # Mutex used to synchronize access to 'documents'
   @@mutex = Mutex.new
 
@@ -75,6 +77,7 @@ class LogStash::Outputs::Mongodb < LogStash::Outputs::Base
   end
 
   def receive(event)
+    retry_count = 0
     begin
       # Our timestamp object now has a to_bson method, using it here
       # {}.merge(other) so we don't taint the event hash innards
@@ -118,10 +121,13 @@ class LogStash::Outputs::Mongodb < LogStash::Outputs::Base
         # If the duplicate key error is on another field, we have no way
         # to fix the issue.
         @logger.warn("Skipping insert because of a duplicate key error", :event => event, :exception => e)
-      else
-        @logger.warn("Failed to send event to MongoDB, retrying in #{@retry_delay.to_s} seconds", :event => event, :exception => e)
+      elsif retry_count < @max_retry || @max_retry < 0
+        @logger.warn("Failed to send event to MongoDB, retrying in #{@retry_delay.to_s} seconds. Retry count is #{retry_count}", :event => event, :exception => e)
         sleep(@retry_delay)
+        retry_count = retry_count + 1
         retry
+      else
+        @logger.warn("Failed to send event to MongoDB, will not retry because exceeded retry count for this event #{retry_count} exceeded maximum retry #{@max_retry}", :event => event, :exception => e)
       end
     end
   end
