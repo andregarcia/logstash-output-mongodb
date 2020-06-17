@@ -4,6 +4,8 @@ require "logstash/namespace"
 require "mongo"
 require_relative "bson/big_decimal"
 require_relative "bson/logstash_timestamp"
+require 'pp'
+require "json/add/exception"
 
 # This output writes events to MongoDB.
 class LogStash::Outputs::Mongodb < LogStash::Outputs::Base
@@ -118,8 +120,11 @@ class LogStash::Outputs::Mongodb < LogStash::Outputs::Base
         # If the duplicate key error is on another field, we have no way
         # to fix the issue.
         @logger.warn("Skipping insert because of a duplicate key error", :event => event, :exception => e)
+      elsif e.is_a?(Mongo::Error::MaxBSONSize)
+        # On a document size limit error, skip the insert, we have no way to fix this issue.
+        @logger.warn("Skipping insert because of a max bson size error", :event => event, :exception => e)
       else
-        @logger.warn("Failed to send event to MongoDB, retrying in #{@retry_delay.to_s} seconds", :event => event, :exception => e)
+        @logger.warn("Failed to send event to MongoDB, retrying in #{@retry_delay.to_s} seconds.", :event => event, :exception => e)
         sleep(@retry_delay)
         retry
       end
